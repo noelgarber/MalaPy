@@ -1,0 +1,9 @@
+LICENSE
+README.md
+pyproject.toml
+src/__init__.py
+src/malapy.py
+src/MalaPy.egg-info/PKG-INFO
+src/MalaPy.egg-info/SOURCES.txt
+src/MalaPy.egg-info/dependency_links.txt
+src/MalaPy.egg-info/top_level.txt

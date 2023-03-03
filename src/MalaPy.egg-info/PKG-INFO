@@ -1,0 +1,19 @@
+Metadata-Version: 2.1
+Name: MalaPy
+Version: 0.0.1
+Summary: A simple Python interface for requesting lists of associated diseases for one or more genes from MalaCards.
+Author-email: Noel Garber <ngarber93@gmail.com>
+Project-URL: Homepage, https://github.com/noelgarber/malapy
+Project-URL: Bug Tracker, https://github.com/noelgarber/malapy/issues
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: GNU General Public License version 3
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.7
+Description-Content-Type: text/markdown
+License-File: LICENSE
+
+# MalaPy
+
+MalaPy is an unofficial Python interface for requesting lists of associated diseases for genes from MalaCards (https://www.malacards.org/).
+
+To use it, you may either use mala_checker() for individual gene names, or check_gene_list() for a list of genes of unlimited length. 

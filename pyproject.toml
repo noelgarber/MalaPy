@@ -1,0 +1,18 @@
+[project]
+name = "MalaPy"
+version = "0.0.1"
+authors = [
+  { name="Noel Garber", email="ngarber93@gmail.com" },
+]
+description = "A simple Python interface for requesting lists of associated diseases for one or more genes from MalaCards."
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU General Public License version 3",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/noelgarber/malapy"
+"Bug Tracker" = "https://github.com/noelgarber/malapy/issues"
