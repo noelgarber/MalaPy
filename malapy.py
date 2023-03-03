@@ -136,3 +136,10 @@ def mala_checker(protein_name, output_type = "string", disease_filter = "All", d
         return results_count, results_list
     elif output_type == "df" or output_type == "dataframe":
         return results_count, results_df
+
+def check_gene_list(gene_list, entry_output_type = "string", disease_filter = "All", disease_list_responses = None):
+    gene_mala_dict = {}
+    for gene in gene_list:
+        results_count, results = mala_checker(gene, output_type = entry_output_type, disease_filter = disease_filter, disease_list_responses = disease_list_responses)
+        gene_mala_dict[gene] = (results_count, results)
+    return gene_mala_dict
