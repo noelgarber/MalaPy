@@ -123,7 +123,7 @@ def mala_checker(protein_name, output_type = "string", disease_filter = "All", d
             name = results_df.at[i, "Name"]
             if name not in diseases_list:
                 rows_to_drop.append(i)
-        results_df.drop(index = rows_to_drop)
+        results_df = results_df.drop(index = rows_to_drop)
 
     results_list = results_df["Name"].values.tolist()
 
