@@ -76,18 +76,18 @@ def get_diseases_lists(urls = "default", output_type = "both"):
 
 # Define a function that searches genes for disease associations and returns a list of associated diseases
 
-def mala_checker(protein_name, output_type = "string", disease_filter = "All", disease_list_responses = None):
+def mala_checker(protein_name, output_type = "string", disease_filter = "All", disease_list_responses = None, show_response_code = False):
     if disease_list_responses == None:
-        print("mala_checker warning: Reference disease lists were not inputted; requesting them repeatedly from MalaCards will cause slow performance!",
-              "\n\t If running in a loop, try running get_diseases_lists outside of the loop first.")
-        disease_df_responses, disease_list_responses = get_diseases_lists()
+        print("No lists of diseases were given; pulling them from MalaCards...")
+        disease_list_responses = get_diseases_lists(output_type="list")
+        print("\tDone!")
 
     search_url = "https://www.malacards.org/search/results?query=%5BGE%5D+%28" + protein_name + "%29&pageSize=-1"
     request_headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"
     }
     search_response = requests.get(search_url, headers = request_headers)
-    print("\tResponse code:", search_response.status_code)
+    print("\tResponse code:", search_response.status_code) if show_response_code else None
 
     search_soup = BeautifulSoup(search_response.content, "html.parser")
     tables = search_soup.find_all("table")
@@ -137,9 +137,14 @@ def mala_checker(protein_name, output_type = "string", disease_filter = "All", d
     elif output_type == "df" or output_type == "dataframe":
         return results_count, results_df
 
-def check_gene_list(gene_list, entry_output_type = "string", disease_filter = "All", disease_list_responses = None):
+def check_gene_list(gene_list, entry_output_type = "string", disease_filter = "All", disease_list_responses = None, show_response_codes = False):
+    if disease_list_responses == None:
+        print("No lists of diseases were given; pulling them from MalaCards...")
+        disease_list_responses = get_diseases_lists(output_type = "list")
+        print("\tDone!")
+
     gene_mala_dict = {}
     for gene in gene_list:
-        results_count, results = mala_checker(gene, output_type = entry_output_type, disease_filter = disease_filter, disease_list_responses = disease_list_responses)
+        results_count, results = mala_checker(gene, output_type = entry_output_type, disease_filter = disease_filter, disease_list_responses = disease_list_responses, show_response_code = show_response_codes)
         gene_mala_dict[gene] = (results_count, results)
     return gene_mala_dict
