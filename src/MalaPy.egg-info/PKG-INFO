@@ -6,7 +6,7 @@ Author-email: Noel Garber <ngarber93@gmail.com>
 Project-URL: Homepage, https://github.com/noelgarber/malapy
 Project-URL: Bug Tracker, https://github.com/noelgarber/malapy/issues
 Classifier: Programming Language :: Python :: 3
-Classifier: License :: OSI Approved :: GNU General Public License version 3
+Classifier: License :: OSI Approved :: GNU General Public License v3 (GPLv3)
 Classifier: Operating System :: OS Independent
 Requires-Python: >=3.7
 Description-Content-Type: text/markdown
