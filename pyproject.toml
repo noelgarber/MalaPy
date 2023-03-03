@@ -2,7 +2,7 @@
 name = "MalaPy"
 version = "0.0.1"
 authors = [
-  { name="Noel Garber", email="ngarber93@gmail.com or noel.garber@sickkids.ca" },
+  { name="Noel Garber", email="ngarber93@gmail.com" },
 ]
 description = "A simple Python interface for requesting lists of associated diseases for one or more genes from MalaCards."
 readme = "README.md"
