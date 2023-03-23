@@ -147,13 +147,17 @@ def drop_unselected_diseases(unfiltered_df, disease_lists_by_category, included_
 
 # Define a function that searches genes for disease associations and returns a list of associated diseases
 
-def mala_checker(protein_name, output_type = "string", included_disease_categories = "All", excluded_disease_categories = "None", disease_list_responses = None, show_response_code = False):
+def mala_checker(gene_name, elite_genes_only = False, output_type = "string", included_disease_categories = "All", excluded_disease_categories = "None", disease_list_responses = None, show_response_code = False):
     if disease_list_responses == None:
         print("No lists of diseases were given; pulling them from MalaCards...")
         disease_list_responses = get_diseases_lists(output_type="list")
         print("\tDone!")
 
-    search_url = "https://www.malacards.org/search/results?query=%5BGE%5D+%28" + protein_name + "%29&pageSize=-1"
+    # Declare request URL based on whether all associated genes, or only Elite Genes (manually curated causal associations), should be searched for each disease association.
+    if elite_genes_only:
+        search_url = "https://www.malacards.org/search/results?query=%5BEL%5D+%28" + gene_name + "%29&pageSize=-1"
+    else:
+        search_url = "https://www.malacards.org/search/results?query=%5BGE%5D+%28" + gene_name + "%29&pageSize=-1"
     request_headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"
     }
@@ -211,7 +215,7 @@ def mala_checker(protein_name, output_type = "string", included_disease_categori
     elif output_type == "df" or output_type == "dataframe":
         return results_count, results_df
 
-def check_gene_list(gene_list, output_type = "dict", included_disease_categories = "All", excluded_disease_categories = "All", disease_list_responses = None, show_response_codes = False):
+def check_gene_list(gene_list, elite_genes_only = False, output_type = "dict", included_disease_categories = "All", excluded_disease_categories = "All", disease_list_responses = None, show_response_codes = False):
     if disease_list_responses == None:
         print("No lists of diseases were given; pulling them from MalaCards...")
 
@@ -236,7 +240,7 @@ def check_gene_list(gene_list, output_type = "dict", included_disease_categories
     if output_type == "dict":
         gene_mala_dict = {}
         for gene in gene_list:
-            results_count, results = mala_checker(gene, output_type = "list", included_disease_categories = included_disease_categories,
+            results_count, results = mala_checker(gene, elite_genes_only = elite_genes_only, output_type = "list", included_disease_categories = included_disease_categories,
                                                   excluded_disease_categories = excluded_disease_categories, disease_list_responses = disease_list_responses,
                                                   show_response_code = show_response_codes)
             gene_mala_dict[gene] = (results_count, results)
@@ -246,7 +250,7 @@ def check_gene_list(gene_list, output_type = "dict", included_disease_categories
     elif output_type == "df" or output_type == "dataframe":
         gene_mala_df = pd.DataFrame(columns = ["Gene", "Results_Count", "Results_List"])
         for i, gene in enumerate(gene_list):
-            results_count, results = mala_checker(gene, output_type = "string", included_disease_categories = included_disease_categories,
+            results_count, results = mala_checker(gene, elite_genes_only = elite_genes_only, output_type = "string", included_disease_categories = included_disease_categories,
                                                   excluded_disease_categories = excluded_disease_categories, disease_list_responses = disease_list_responses,
                                                   show_response_code = show_response_codes)
             new_row = gene, results_count, results
@@ -286,6 +290,7 @@ if __name__ == "__main__":
             done_excluded_diseases = True
         else:
             excluded_diseases.append(excluded_disease)
+    elite_genes_only = input("Query elite genes (causal, manually curated associations) only? (Y/N)  ")
 
     #obtain the gene(s) to search
     if input_type == "list":
@@ -296,8 +301,13 @@ if __name__ == "__main__":
             gene_list = gene_df.iloc[:,0].tolist()
         else:
             gene_list = gene_df[gene_list_header].values.tolist()
-        results_df = check_gene_list(gene_list = gene_list, output_type = "df", included_disease_categories = included_diseases,
-                                     excluded_disease_categories = excluded_diseases, show_response_codes = True)
+
+        if elite_genes_only == "Y":
+            results_df = check_gene_list(gene_list = gene_list, elite_genes_only = True, output_type = "df", included_disease_categories = included_diseases,
+                                         excluded_disease_categories = excluded_diseases, show_response_codes = True)
+        else:
+            results_df = check_gene_list(gene_list = gene_list, elite_genes_only = False, output_type = "df", included_disease_categories = included_diseases,
+                                         excluded_disease_categories = excluded_diseases, show_response_codes = True)
 
         # Construct output filename/path
         included_diseases_str = "including"
