@@ -1,13 +1,16 @@
 import numpy as np
 import pandas as pd
 import requests
+import time
+import collections
 from bs4 import BeautifulSoup
 
 # Get the lists of diseases by category from MalaCards
 
-def get_diseases_lists(urls = "default", output_type = "both"):
-    if urls == "default":
-        disease_urls = {
+def get_diseases_lists(categories = "default", output_type = "both", custom_urls = None):
+    # Define the set of urls to use for category lookups
+    if custom_urls == None:
+        category_url_dict = {
             "Blood": "https://www.malacards.org/categories/blood_disease_list",
             "Bone": "https://www.malacards.org/categories/bone_disease_list",
             "Cardiovascular": "https://www.malacards.org/categories/cardiovascular_disease_list",
@@ -33,8 +36,19 @@ def get_diseases_lists(urls = "default", output_type = "both"):
             "Metabolic": "https://www.malacards.org/categories/metabolic_disease_list",
             "Rare": "https://www.malacards.org/categories/rare_diseases"
         }
-    elif isinstance(urls, dict):
-        disease_urls = urls
+    elif isinstance(custom_urls, dict):
+        category_url_dict = custom_urls
+    else:
+        # custom_urls must be dict
+        raise Exception("get_diseases_lists error: custom_urls must be None or <list>, not " + str(type(custom_urls)))
+
+    # Check if a subset of categories should be used, or if all categories should be requested
+    if categories == "default":
+        category_url_subset = category_url_dict
+    elif isinstance(categories, list):
+        category_url_subset = {}
+        for category in categories:
+            category_url_subset[category] = category_url_dict.get(category)
     else:
         raise Exception("get_diseases_lists error: input was " + str(type(urls)) + ", but a dictionary was expected.")
 
@@ -46,7 +60,7 @@ def get_diseases_lists(urls = "default", output_type = "both"):
     disease_df_responses = {}
     disease_list_responses = {}
 
-    for category, url in disease_urls.items():
+    for category, url in category_url_subset.items():
         response = requests.get(url, headers = request_headers)
 
         soup = BeautifulSoup(response.content, "html.parser")
@@ -74,9 +88,66 @@ def get_diseases_lists(urls = "default", output_type = "both"):
     else:
         raise Exception("get_diseases_lists error: unexpected output type (" + str(output_type) + ") was selected.")
 
+# Define a function that removes diseases that are not in a selected category
+
+def drop_unselected_diseases(unfiltered_df, disease_lists_by_category, included_disease_categories = "All", excluded_disease_categories = "None"):
+    # Check if unfiltered_df is a dataframe - this is required for the drop() method to work
+    if not isinstance(unfiltered_df, pd.DataFrame):
+        raise TypeError("drop_unselected_diseases() error: first positional argument should be input dataframe, but it is " + str(type(unfiltered_df)))
+
+    # Ensure that filter criteria are correctly formatted
+    if included_disease_categories == "All" and excluded_disease_categories == "None":
+        # If no filter criteria are set, abort and return the original dataframe
+        return unfiltered_df
+    else:
+        # Declare included disease categories
+        if included_disease_categories == "All":
+            # To include all disease categories, take all the keys from the dict of disease lists
+            included_disease_categories = list(disease_lists_by_category.keys())
+        elif isinstance(included_disease_categories, str):
+            included_disease_categories = [included_disease_categories]
+        elif not isinstance(included_disease_categories, list):
+            raise TypeError("included_disease_categories in drop_unselected_diseases() must be string (single item) or list, not " + str(type(included_disease_categories)))
+        elif len(included_disease_categories) == 0:
+            # If no included disease categories are passed, use all of them
+            included_disease_categories = list(disease_lists_by_category.keys())
+
+        # Declare excluded disease categories
+        if excluded_disease_categories == "None":
+            excluded_disease_categories = []
+        elif isinstance(excluded_disease_categories, str):
+            excluded_disease_categories = [excluded_disease_categories]
+        elif not isinstance(excluded_disease_categories, list):
+            raise TypeError("excluded_disease_categories in drop_unselected_diseases() must be string (single item) or list, not " + str(type(excluded_disease_categories)))
+
+    # Make a copy of the unfiltered dataframe; filtered rows will be dropped later
+    filtered_df = unfiltered_df.copy()
+
+    # Flatten included/excluded disease lists
+    included_disease_lists = [disease_lists_by_category.get(category) for category in included_disease_categories]
+    included_diseases = [disease for category_diseases in included_disease_lists for disease in category_diseases]
+
+    excluded_disease_lists = [disease_lists_by_category.get(category) for category in excluded_disease_categories]
+    excluded_diseases = [disease for category_diseases in excluded_disease_lists for disease in category_diseases]
+
+    # Test if a disease is in an included category AND is not in an excluded category
+    rows_to_drop = []
+    for i in np.arange(len(unfiltered_df)):
+        disease = unfiltered_df.at[i, "Name"]
+        if disease not in included_diseases:
+            rows_to_drop.append(i)
+        elif disease in excluded_diseases:
+            rows_to_drop.append(i)
+
+    #Drop identified rows
+    filtered_df = filtered_df.drop(index = rows_to_drop)
+
+    return filtered_df
+
+
 # Define a function that searches genes for disease associations and returns a list of associated diseases
 
-def mala_checker(protein_name, output_type = "string", disease_filter = "All", disease_list_responses = None, show_response_code = False):
+def mala_checker(protein_name, output_type = "string", included_disease_categories = "All", excluded_disease_categories = "None", disease_list_responses = None, show_response_code = False):
     if disease_list_responses == None:
         print("No lists of diseases were given; pulling them from MalaCards...")
         disease_list_responses = get_diseases_lists(output_type="list")
@@ -86,17 +157,25 @@ def mala_checker(protein_name, output_type = "string", disease_filter = "All", d
     request_headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"
     }
+    print("Search url:", search_url)
     search_response = requests.get(search_url, headers = request_headers)
     print("\tResponse code:", search_response.status_code) if show_response_code else None
 
     search_soup = BeautifulSoup(search_response.content, "html.parser")
     tables = search_soup.find_all("table")
-    if tables == None:
-        return ""
-    try:
-        search_table = tables[1] # take the second table, which contains all the disease list data
-    except IndexError:
-        return ""
+
+    # Check if tables containing the data are present
+    if tables == None or len(tables) < 2:
+        # Abort early because no data was found in the search; return empty values
+        if output_type == "string":
+            return 0, ""
+        elif output_type == "list":
+            return 0, []
+        elif output_type == "df" or output_type == "dataframe":
+            return 0, pd.DataFrame()
+
+    # Take the second table, which contains the disease list data
+    search_table = tables[1]
     search_rows = search_table.find_all("tr")
 
     # Extract the data
@@ -116,19 +195,14 @@ def mala_checker(protein_name, output_type = "string", disease_filter = "All", d
     results_df = pd.DataFrame(search_data_odd, columns = search_cols)
     results_df = results_df.drop("Blank", axis = 1)
 
-    if disease_filter != "All":
-        rows_to_drop = []
-        diseases_list = disease_list_responses.get(disease_filter)
-        for i in np.arange(len(results_df)):
-            name = results_df.at[i, "Name"]
-            if name not in diseases_list:
-                rows_to_drop.append(i)
-        results_df = results_df.drop(index = rows_to_drop)
+    results_df = drop_unselected_diseases(unfiltered_df = results_df, disease_lists_by_category = disease_list_responses,
+                                          included_disease_categories = included_disease_categories, excluded_disease_categories = excluded_disease_categories)
 
     results_list = results_df["Name"].values.tolist()
-
     results_count = len(results_list)
-    results_string = ", ".join(str(x) for x in results_list)
+    print("Count of results:", str(results_count))
+
+    results_string = "; ".join(str(x) for x in results_list)
 
     if output_type == "string":
         return results_count, results_string
@@ -137,14 +211,107 @@ def mala_checker(protein_name, output_type = "string", disease_filter = "All", d
     elif output_type == "df" or output_type == "dataframe":
         return results_count, results_df
 
-def check_gene_list(gene_list, entry_output_type = "string", disease_filter = "All", disease_list_responses = None, show_response_codes = False):
+def check_gene_list(gene_list, output_type = "dict", included_disease_categories = "All", excluded_disease_categories = "All", disease_list_responses = None, show_response_codes = False):
+    if disease_list_responses == None:
+        print("No lists of diseases were given; pulling them from MalaCards...")
+
+        # If included/excluded disease categories are specified, collect the total list of relevant categories to pull from MalaCards
+        relevant_disease_categories = []
+        if included_disease_categories != "All":
+            relevant_disease_categories.extend(included_disease_categories)
+        if excluded_disease_categories != "All":
+            relevant_disease_categories.extend(excluded_disease_categories)
+
+        # If included/excluded disease categories are specified, request only these categories from MalaCards; otherwise, request all of them
+        if len(relevant_disease_categories) > 0:
+            disease_list_responses = get_diseases_lists(categories = relevant_disease_categories, output_type="list")
+        else:
+            disease_list_responses = get_diseases_lists(output_type="list")
+
     if disease_list_responses == None:
         print("No lists of diseases were given; pulling them from MalaCards...")
         disease_list_responses = get_diseases_lists(output_type = "list")
         print("\tDone!")
 
-    gene_mala_dict = {}
-    for gene in gene_list:
-        results_count, results = mala_checker(gene, output_type = entry_output_type, disease_filter = disease_filter, disease_list_responses = disease_list_responses, show_response_code = show_response_codes)
-        gene_mala_dict[gene] = (results_count, results)
-    return gene_mala_dict
+    if output_type == "dict":
+        gene_mala_dict = {}
+        for gene in gene_list:
+            results_count, results = mala_checker(gene, output_type = "list", included_disease_categories = included_disease_categories,
+                                                  excluded_disease_categories = excluded_disease_categories, disease_list_responses = disease_list_responses,
+                                                  show_response_code = show_response_codes)
+            gene_mala_dict[gene] = (results_count, results)
+            # Pause to prevent HTTP 429
+            time.sleep(1)
+        return gene_mala_dict
+    elif output_type == "df" or output_type == "dataframe":
+        gene_mala_df = pd.DataFrame(columns = ["Gene", "Results_Count", "Results_List"])
+        for i, gene in enumerate(gene_list):
+            results_count, results = mala_checker(gene, output_type = "string", included_disease_categories = included_disease_categories,
+                                                  excluded_disease_categories = excluded_disease_categories, disease_list_responses = disease_list_responses,
+                                                  show_response_code = show_response_codes)
+            new_row = gene, results_count, results
+            gene_mala_df = gene_mala_df.append(pd.Series(dict(zip(gene_mala_df.columns, new_row))), ignore_index=True)
+            # Pause to prevent HTTP 429
+            time.sleep(1)
+        return gene_mala_df
+    else:
+        raise Exception("unsupported output_type in check_gene_list(): expected \"dict\", \"df\", or \"dataframe\", but got " + str(output_type))
+
+if __name__ == "__main__":
+    # prompt the user to declare whether a single gene or a whole list should be queried
+    type_declared = False
+    while not type_declared:
+        input_type = input("Do you want to check a single gene or a whole list? Please enter \"gene\" or \"list\":  ")
+        if input_type == "gene" or input_type == "list":
+            type_declared = True
+        else:
+            print("Unsupported input. Please try again.")
+
+    # prompt to define inclusions and exclusions
+    print("Please input the list of disease categories to INCLUDE in the search, or hit enter to use the default set.")
+    done_included_diseases = False
+    included_diseases = []
+    while not done_included_diseases:
+        included_disease = input("\tEnter included disease category:  ")
+        if included_disease == "":
+            done_included_diseases = True
+        else:
+            included_diseases.append(included_disease)
+    print("Please input the list of disease categories to EXCLUDE in the search (matching entries are always rejected), or hit enter to specify none.")
+    done_excluded_diseases = False
+    excluded_diseases = []
+    while not done_excluded_diseases:
+        excluded_disease = input("\tEnter excluded disease category:  ")
+        if excluded_disease == "":
+            done_excluded_diseases = True
+        else:
+            excluded_diseases.append(excluded_disease)
+
+    #obtain the gene(s) to search
+    if input_type == "list":
+        gene_list_path = input("Enter the path to a CSV file containing the list of genes:  ")
+        gene_df = pd.read_csv(gene_list_path)
+        gene_list_header = input("Enter the column name containing the gene list, or hit enter to use the first column:  ")
+        if gene_list_header == "":
+            gene_list = gene_df.iloc[:,0].tolist()
+        else:
+            gene_list = gene_df[gene_list_header].values.tolist()
+        results_df = check_gene_list(gene_list = gene_list, output_type = "df", included_disease_categories = included_diseases,
+                                     excluded_disease_categories = excluded_diseases, show_response_codes = True)
+
+        # Construct output filename/path
+        included_diseases_str = "including"
+        for included_disease in included_diseases:
+            included_diseases_str = included_diseases_str + "-" + included_disease
+        excluded_diseases_str = "excluding"
+        for excluded_disease in excluded_diseases:
+            excluded_diseases_str = excluded_diseases_str + "-" + excluded_disease
+        output_path = gene_list_path[:-4] + "_results_" + included_diseases_str + "_" + excluded_diseases_str + ".csv"
+
+        # Save output file
+        results_df.to_csv(output_path)
+
+    elif input_type == "gene":
+        gene_name = input("Enter the gene name to search:  ")
+        results_tuple = mala_checker()
+
