@@ -237,30 +237,32 @@ def check_gene_list(gene_list, elite_genes_only = False, output_type = "dict", i
         disease_list_responses = get_diseases_lists(output_type = "list")
         print("\tDone!")
 
+    # Set the delay for making MalaCards requests to prevent HTTP 429 (too many requests)
+    request_delay = 0.5
+
     if output_type == "dict":
         gene_mala_dict = {}
         for gene in gene_list:
-            results_count, results = mala_checker(gene, elite_genes_only = elite_genes_only, output_type = "list", included_disease_categories = included_disease_categories,
+            results_count, results_list = mala_checker(gene, elite_genes_only = elite_genes_only, output_type = "list", included_disease_categories = included_disease_categories,
                                                   excluded_disease_categories = excluded_disease_categories, disease_list_responses = disease_list_responses,
                                                   show_response_code = show_response_codes)
-            gene_mala_dict[gene] = (results_count, results)
-            # Pause to prevent HTTP 429
-            time.sleep(1)
+            gene_mala_dict[gene] = (results_count, results_list)
+            time.sleep(request_delay)
         return gene_mala_dict
     elif output_type == "df" or output_type == "dataframe":
         gene_mala_df = pd.DataFrame(columns = ["Gene", "Results_Count", "Results_List"])
         for i, gene in enumerate(gene_list):
-            results_count, results = mala_checker(gene, elite_genes_only = elite_genes_only, output_type = "string", included_disease_categories = included_disease_categories,
+            results_count, results_string = mala_checker(gene, elite_genes_only = elite_genes_only, output_type = "string", included_disease_categories = included_disease_categories,
                                                   excluded_disease_categories = excluded_disease_categories, disease_list_responses = disease_list_responses,
                                                   show_response_code = show_response_codes)
-            new_row = gene, results_count, results
+            new_row = gene, results_count, results_string
             gene_mala_df = gene_mala_df.append(pd.Series(dict(zip(gene_mala_df.columns, new_row))), ignore_index=True)
-            # Pause to prevent HTTP 429
-            time.sleep(1)
+            time.sleep(request_delay)
         return gene_mala_df
     else:
         raise Exception("unsupported output_type in check_gene_list(): expected \"dict\", \"df\", or \"dataframe\", but got " + str(output_type))
 
+# Execute main business logic if malapy.py is being run as a standalone script
 if __name__ == "__main__":
     # prompt the user to declare whether a single gene or a whole list should be queried
     type_declared = False
